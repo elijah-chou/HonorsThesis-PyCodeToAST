@@ -1,6 +1,11 @@
+from __future__ import division
+from __future__ import with_statement
+from __future__ import absolute_import
 import pandas as pd
 import numpy as np
 import ast
+import os
+from io import open
 
 class RootTransformer(ast.NodeTransformer):
     def __init__(self, listOfNodes):
@@ -9,7 +14,7 @@ class RootTransformer(ast.NodeTransformer):
         self.listOfNodes.append(node)
         ast.NodeVisitor.generic_visit(self, node)
         
-class Tree2:
+class Tree2(object):
     TD = []
     
     def __init__(self, path):
@@ -19,7 +24,7 @@ class Tree2:
         self.labels = []
         self.indexes = {}
         self.leftmosts = {}
-        with open(path, "r") as source:
+        with open(path, u"r") as source:
             tmp = ast.parse(source.read())
             self.root = Tree2.replace(tmp)
             
@@ -27,7 +32,7 @@ class Tree2:
         return self.root
     
     def traverse(self):
-        self.traverse1(self.root, "root", self.labels)
+        self.traverse1(self.root, u"root", self.labels)
         
     def traverse1(self, node, name, labels):
         attributes = []
@@ -43,10 +48,10 @@ class Tree2:
                 attributes.append(attribute[1])
         
         for attribute in attributes:
-            if type(attribute) == type(''):
+            if type(attribute) == type(u''):
                 name += attribute
             else:
-                name += str(attribute)
+                name += unicode(attribute)
             
         for child in subNodes:
             self.traverse1(child[1], child[0], labels)
@@ -98,9 +103,9 @@ class Tree2:
             self.leftmosts.update({node: self.leftmosts[children[0]]})
             
     def keyroots_func(self):
-        for i in range(len(self.l)):
+        for i in xrange(len(self.l)):
             flag = 0
-            for j in range(i+1, len(self.l)):
+            for j in xrange(i+1, len(self.l)):
                 if self.l[j] == self.l[i]:
                     flag = 1
             if flag == 0:
@@ -124,8 +129,8 @@ class Tree2:
         
         Tree2.TD = np.zeros(shape=(len(l1) + 1, len(l2) + 1))
         
-        for i1 in range(len(keyroots1) + 1):
-            for j1 in range(len(keyroots2) + 1):
+        for i1 in xrange(len(keyroots1) + 1):
+            for j1 in xrange(len(keyroots2) + 1):
                 i = keyroots1[i1-1]
                 j = keyroots2[j1-1]
                 Tree2.TD[i,j] = Tree2.treedist(l1, l2, i, j, tree1, tree2)
@@ -141,14 +146,14 @@ class Tree2:
         relabel = 1
         
         forestdist[0,0] = 0
-        for i1 in range(l1[i-1], i + 1):
+        for i1 in xrange(l1[i-1], i + 1):
             forestdist[i1, 0] = forestdist[i1-1, 0] + delete
             
-        for j1 in range(l2[j-1], j + 1):
+        for j1 in xrange(l2[j-1], j + 1):
             forestdist[0, j1] = forestdist[0, j1-1] + insert
             
-        for i1 in range(l1[i-1], i + 1):
-            for j1 in range(l2[j-1], j+1):
+        for i1 in xrange(l1[i-1], i + 1):
+            for j1 in xrange(l2[j-1], j+1):
                 i_temp = 0 if (l1[i-1] > i1 - 1) else i1 - 1
                 j_temp = 0 if (l2[j-1] > j1 - 1) else j1 - 1
                 if l1[i1-1] == l1[i-1] and l2[j1-1] == l2[j-1]:
@@ -176,9 +181,67 @@ class Tree2:
         i = 0
         for a in listOfNameNodes:
             if a.id not in mapping.keys():
-                mapping[a.id] = "v" + str(i)
-                a.id = "v" + str(i)
+                mapping[a.id] = u"v" + unicode(i)
+                a.id = u"v" + unicode(i)
                 i += 1
             else:
                 a.id = mapping[a.id]
         return node
+def calculateDistanceForProblem(dir, question, resultsPath):
+    print u"Now calculating tree edit distances for " + question
+    originalDir = os.getcwdu()
+    os.chdir(dir)
+    files = os.listdir(dir)
+    finalFiles = []
+    for file in files:
+        try:
+            test = Tree2(file)
+            finalFiles.append(file)
+        except:
+            print u"Could not parse " + file
+    curDis = 0
+    score_distance = []
+    count = 0
+    for i in xrange(len(finalFiles)):
+        total = 0
+        totalFiles = 0
+        for j in xrange(len(finalFiles)):
+            if i != j:
+                min = 99999999999999999999999999999 #fake max size
+                file1Tree = Tree2(finalFiles[i])
+                file2Tree = Tree2(finalFiles[j])
+                try:
+                    curDis = Tree2.ZhangShasha(file1Tree, file2Tree)
+                    if (curDis < min):
+                        min = curDis
+                    total += min
+                    totalFiles += 1
+                except:
+                    print u"Could not calculate distance between " + finalFiles[i] + " and " + finalFiles[j]
+        avg = 0
+        if totalFiles != 0:
+            avg = total / totalFiles
+        score_distance.append(avg)
+        print u"The average distance for " + finalFiles[i] + u" is " + unicode(avg)
+    columns = [u'Year', u'Semester', u'Quiz/Exam', u'Student ID', u'Coding Problem', u'Earned Score', u'Maximum Score', u'Distance']
+    lst = []
+    for i in xrange(len(finalFiles)):
+        split = finalFiles[i].split(u".")
+        lst.append([split[0], split[2], split[3], split[4], split[5], split[6], split[7], score_distance[i]])
+    data = pd.DataFrame(lst, columns=columns)
+    data.to_csv(resultsPath + u".csv", index=False)
+    os.chdir(originalDir)
+
+def main():
+    homeDir = u"C:/Users/Elijah/Downloads/code-answers-scores-python/code-answers-scores-python"
+    resultsDir = u"C:/Users/Elijah/Downloads/code-answers-scores-python/Results"
+    validProblems = [u'BodyType', u'BounceCounter', u'BreakDownNumber', u'Cardio', u'Cheaper', u'DashSquare', u'DoubleLen', u'DoublePentagon', u'ExclusiveOR', u'FactorialFor', u'FactorialWhile', u'FromNto1', u'GrowingSquares', u'GrowingStairs', u'Highway', u'InsertNumber', u'LineOfHexagons', u'MixHalf', u'MultiTri', u'MultOddsFor', u'MultOddsWhile', u'Power', u'ProdAll', u'PulsingCircles', u'PulsingCircles3', u'RedBouncingBall', u'RemoveEndDots', u'RotatingSticks', u'SquareLine', u'Stairs', u'StarLine', u'Target', u'TinyTweet', u'TkFractal', u'Towers', u'Triangles', u'TriSpiral', u'TurtleFractal', u'TurtlePath', u'WindEffect', u'Younger']
+    for question in os.listdir(homeDir):
+        if question in validProblems:
+            d = os.path.join(homeDir, question)
+            resultPath = os.path.join(resultsDir, question)
+            if os.path.isdir(d):
+                calculateDistanceForProblem(d, question, resultPath)
+
+if __name__ == u"__main__":
+    main()
